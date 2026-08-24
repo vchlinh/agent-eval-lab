@@ -12,6 +12,7 @@ import dataclasses
 import subprocess
 import time
 import uuid
+from pathlib import Path
 
 IMAGE_NAME = "agent-eval-lab-sandbox"
 DEFAULT_TIMEOUT_SECONDS = 60
@@ -81,7 +82,18 @@ class Sandbox:
         if not _image_exists():
             build_image()
 
-    def run(self, command: list[str]) -> SandboxResult:
+    def run(
+        self,
+        command: list[str],
+        extra_ro_mounts: dict[str, str] | None = None,
+        extra_env: dict[str, str] | None = None,
+    ) -> SandboxResult:
+        """extra_ro_mounts maps host_path -> container_path, each mounted
+        read-only as a top-level mount (a sibling of /workspace, never
+        nested inside it — Docker Desktop's macOS filesystem driver
+        can't reliably bind-mount a path inside an already-mounted
+        directory, and silently leaves a broken mountpoint file behind
+        on the host when it fails)."""
         container_name = f"agent-eval-{uuid.uuid4().hex[:12]}"
         docker_cmd = [
             "docker", "run",
@@ -92,6 +104,12 @@ class Sandbox:
             "--cpus", self.cpus,
             "--pids-limit", "128",
             "-v", f"{self.repo_dir}:/workspace",
+        ]
+        for host_path, container_path in (extra_ro_mounts or {}).items():
+            docker_cmd += ["-v", f"{host_path}:{container_path}:ro"]
+        for key, value in (extra_env or {}).items():
+            docker_cmd += ["-e", f"{key}={value}"]
+        docker_cmd += [
             "-w", "/workspace",
             IMAGE_NAME,
             *command,
@@ -129,3 +147,15 @@ class Sandbox:
     def run_tests(self, test_command: list[str] | None = None) -> SandboxResult:
         """Convenience wrapper: run pytest (or a custom command) in the sandbox."""
         return self.run(test_command or ["pytest", "-q"])
+
+    def run_hidden_tests(self, tests_dir: str, test_command: list[str] | None = None) -> SandboxResult:
+        """Grade against hidden tests without ever exposing them on the
+        host-side repo_dir (the directory the agent's file tools can see
+        and edit). The tests directory is mounted read-only at /hidden_tests
+        — a sibling of /workspace, not nested inside it — and PYTHONPATH is
+        set so pytest, running against /hidden_tests, can still resolve
+        `from <module> import ...` against the code under test in /workspace."""
+        tests_dir_path = Path(tests_dir).resolve()
+        extra_ro_mounts = {str(tests_dir_path): "/hidden_tests"}
+        command = test_command or ["pytest", "-q", "/hidden_tests"]
+        return self.run(command, extra_ro_mounts=extra_ro_mounts, extra_env={"PYTHONPATH": "/workspace"})
