@@ -1,0 +1,50 @@
+id: task_001
+title: Fix dropped last item in paginate()
+category: bug_fix
+description: |
+  The file `paginate.py` contains a function `paginate(items, page_size)`
+  that is supposed to split `items` into consecutive pages of at most
+  `page_size` items each, preserving order, with every item from `items`
+  appearing in exactly one page.
+
+  It currently has a bug: for many input sizes, the last item in `items`
+  is silently dropped from the result.
+
+  Fix `paginate` so that:
+  - every item in `items` appears in exactly one page, in order
+  - no page contains more than `page_size` items
+  - no page is ever empty
+  - an empty `items` list produces no pages at all
+
+budget:
+  max_iterations: 15
+  timeout_seconds: 30
+
+test_command: ["pytest", "-q"]
+
+qa:
+  starting_repo_fails: true
+  description_self_sufficient: true
+  reference_solution_passes: true
+  alternate_solution_passes: true
+  unrelated_behavior_intact: true
+  tests_not_guessable: true
+  tests_catch_incomplete_solution: true
+  runs_within_budget: true
+  notes: |
+    Verified by actually running each variant through harness/sandbox.py
+    (2026-08-23), not just reasoned about by hand:
+    - repo/paginate.py (buggy `range(0, len(items) - 1, page_size)`):
+      10 failed, 27 passed. Confirms the starting repo genuinely fails.
+    - solution/paginate.py (`range(0, len(items), page_size)`): 37 passed.
+    - Alternate valid implementation (math.ceil + slicing by page index,
+      a structurally different loop) also: 37 passed — tests aren't
+      overfit to the reference's specific loop shape.
+    - Plausible incomplete "fix" (overcorrecting to
+      `range(0, len(items) + 1, page_size)`, which appends a trailing
+      empty page whenever length is an exact multiple of page_size, and
+      also breaks the empty-input case): 9 failed, 28 passed. Confirms
+      the tests catch a superficially-plausible wrong fix, not just the
+      original bug.
+    - No unrelated behavior exists yet (single-function file), so nothing
+      to regress.

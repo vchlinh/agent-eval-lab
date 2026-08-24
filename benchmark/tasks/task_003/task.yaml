@@ -1,0 +1,51 @@
+id: task_003
+title: moving_average() mishandles non-positive and boundary window sizes
+category: edge_case
+description: |
+  `stats.py` contains `moving_average(values, window)`, which returns a
+  list where element i is the average of `values[i:i+window]`, for every
+  i where a full window fits.
+
+  It works correctly for ordinary inputs, but misbehaves at the
+  boundaries. Fix it so that:
+  - if `window <= 0`, it raises `ValueError("window must be a positive
+    integer")` (currently `window == 0` raises a confusing
+    `ZeroDivisionError`, and negative windows silently return wrong
+    numbers instead of raising anything)
+  - if `values` is empty, it returns an empty list
+  - if `window > len(values)`, it returns an empty list (not an error)
+
+budget:
+  max_iterations: 15
+  timeout_seconds: 30
+
+test_command: ["pytest", "-q"]
+
+qa:
+  starting_repo_fails: true
+  description_self_sufficient: true
+  reference_solution_passes: true
+  alternate_solution_passes: true
+  unrelated_behavior_intact: true
+  tests_not_guessable: true
+  tests_catch_incomplete_solution: true
+  runs_within_budget: true
+  notes: |
+    Verified by actually running each variant through harness/sandbox.py
+    (2026-08-24):
+    - repo/stats.py (buggy): 3 failed, 5 passed. The 3 failures are all
+      the non-positive-window cases (window=0 raises ZeroDivisionError
+      instead of ValueError; window=-1 and window=-5 raise nothing and
+      silently return wrong numbers). The window > len(values) and empty
+      cases already pass on the buggy code by coincidence of how Python's
+      range() handles a negative-length range — confirms those aren't
+      accidentally broken by the fix (unrelated behavior stays intact).
+    - solution/stats.py: 8 passed.
+    - Alternate valid implementation (list comprehension instead of a
+      for-loop, plus an isinstance guard): 8 passed.
+    - Plausible incomplete fix (guards only `window == 0`, the literal
+      exception seen in the bug report, but forgets negative windows):
+      2 failed, 6 passed — still fails on window=-1 and window=-5. This
+      is the realistic failure mode of a developer patching to the
+      specific error they observed rather than the general condition
+      stated in the task description.

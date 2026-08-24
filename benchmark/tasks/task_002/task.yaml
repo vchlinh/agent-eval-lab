@@ -1,0 +1,45 @@
+id: task_002
+title: Add low_stock() to Inventory
+category: feature
+description: |
+  `inventory.py` contains an `Inventory` class that tracks item quantities
+  (`add`, `remove`, `quantity_of`). It's missing a `low_stock` method.
+
+  Add a method `low_stock(self, threshold)` that returns a sorted list of
+  item names whose current quantity is greater than 0 and less than or
+  equal to `threshold`. Items with a quantity of exactly 0 must NOT be
+  included (they're out of stock, which is a different concern from low
+  stock). If no items qualify, return an empty list.
+
+budget:
+  max_iterations: 15
+  timeout_seconds: 30
+
+test_command: ["pytest", "-q"]
+
+qa:
+  starting_repo_fails: true
+  description_self_sufficient: true
+  reference_solution_passes: true
+  alternate_solution_passes: true
+  unrelated_behavior_intact: true
+  tests_not_guessable: true
+  tests_catch_incomplete_solution: true
+  runs_within_budget: true
+  notes: |
+    Verified by actually running each variant through harness/sandbox.py
+    (2026-08-24):
+    - repo/inventory.py (method doesn't exist): 7 failed, 1 passed
+      (the one pre-existing test of add/remove/quantity_of still passes,
+      confirming the starting repo isn't broken elsewhere).
+    - solution/inventory.py: 8 passed.
+    - Alternate valid implementation (explicit loop + list.sort() instead
+      of a sorted generator expression): 8 passed.
+    - Plausible incomplete fix (`qty <= threshold` without excluding
+      qty == 0): 1 failed, 7 passed — caught specifically by
+      test_zero_quantity_after_full_removal_is_excluded, which exploits
+      that `remove()` leaves a zero-value key in the internal dict rather
+      than deleting it. This edge case isn't hinted at in the task
+      description; it has to be discovered by reading remove()'s actual
+      behavior, which is what keeps the tests from being guessable from
+      the description alone.
