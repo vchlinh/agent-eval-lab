@@ -10,17 +10,19 @@ from __future__ import annotations
 
 import dataclasses
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 from agent.providers import Provider
 from harness.sandbox import Sandbox
 
-PROMPT_VERSION = "react_v1"
+PROMPT_VERSION = "react_v2"
 SYSTEM_PROMPT = (Path(__file__).parent / "prompts" / f"{PROMPT_VERSION}.md").read_text()
 
 
 @dataclasses.dataclass
 class AgentStep:
+    timestamp: str
     iteration: int
     tool: str
     args: dict
@@ -28,6 +30,10 @@ class AgentStep:
     tokens_in: int
     tokens_out: int
     latency_ms: float
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 @dataclasses.dataclass
@@ -86,18 +92,40 @@ def execute_tool(working_dir: Path, sandbox: Sandbox, tests_dir: Path, tool: str
     return f"ERROR: unknown tool '{tool}' — valid tools: list_files, read_file, write_file, run_tests, finish"
 
 
+def _extract_fenced_content(remainder: str) -> str:
+    """Pull the raw text out of the first ```-fenced block in `remainder`,
+    dropping an optional language tag on the opening fence line."""
+    fence_start = remainder.find("```")
+    if fence_start == -1:
+        raise ValueError("write_file response is missing its fenced content block")
+    after_open = remainder[fence_start + 3 :]
+    if "\n" in after_open:
+        after_open = after_open.split("\n", 1)[1]
+    fence_end = after_open.find("```")
+    if fence_end == -1:
+        raise ValueError("write_file response's fenced content block is not closed")
+    return after_open[:fence_end]
+
+
 def parse_step(text: str) -> dict:
-    """Extract the single JSON object the model was told to respond with,
-    tolerating a markdown code fence or stray prose around it."""
-    stripped = text.strip().strip("`")
-    if stripped.lower().startswith("json"):
-        stripped = stripped[4:]
-    start, end = stripped.find("{"), stripped.rfind("}")
-    if start == -1 or end == -1:
+    """Extract the JSON header the model was told to respond with. Finds
+    the first '{' anywhere in the text (so a leading markdown fence around
+    just the header doesn't matter) and parses one JSON value from there
+    with json.JSONDecoder.raw_decode, ignoring anything after it — this is
+    what makes it safe to follow the header with a separate fenced code
+    block for write_file, instead of naively searching for the *last*
+    '}' in the whole response, which a trailing fence could contain."""
+    start = text.find("{")
+    if start == -1:
         raise ValueError("no JSON object found in model response")
-    step = json.loads(stripped[start : end + 1])
+    try:
+        step, end = json.JSONDecoder().raw_decode(text, start)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"malformed JSON header: {e}") from e
     if "tool" not in step:
         raise ValueError("response JSON is missing the 'tool' field")
+    if step["tool"] == "write_file":
+        step.setdefault("args", {})["content"] = _extract_fenced_content(text[end:])
     return step
 
 
@@ -124,7 +152,7 @@ def run_agent(
         except ValueError as e:
             observation = f"ERROR: {e}. Respond with exactly one JSON object as instructed."
             messages.append({"role": "user", "content": observation})
-            steps.append(AgentStep(iteration, "parse_error", {}, observation,
+            steps.append(AgentStep(_now(), iteration, "parse_error", {}, observation,
                                     result.tokens_in, result.tokens_out, result.latency_ms))
             continue
 
@@ -132,13 +160,13 @@ def run_agent(
 
         if tool == "finish":
             summary = args.get("summary", "")
-            steps.append(AgentStep(iteration, "finish", args, summary,
+            steps.append(AgentStep(_now(), iteration, "finish", args, summary,
                                     result.tokens_in, result.tokens_out, result.latency_ms))
             return AgentRunResult(finished=True, iterations=iteration, steps=steps, summary=summary)
 
         observation = execute_tool(working_dir, sandbox, tests_dir, tool, args)
         messages.append({"role": "user", "content": f"Observation:\n{observation}"})
-        steps.append(AgentStep(iteration, tool, args, observation,
+        steps.append(AgentStep(_now(), iteration, tool, args, observation,
                                 result.tokens_in, result.tokens_out, result.latency_ms))
 
     return AgentRunResult(finished=False, iterations=max_iterations, steps=steps,
