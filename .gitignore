@@ -4,3 +4,4 @@ PROGRESS.md
 .venv/
 __pycache__/
 *.pyc
+results/
