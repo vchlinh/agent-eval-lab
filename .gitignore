@@ -1,5 +1,6 @@
 .DS_Store
 PROGRESS.md
+LEARNING.md
 .claude/
 .venv/
 __pycache__/
