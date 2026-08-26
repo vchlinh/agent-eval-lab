@@ -34,7 +34,7 @@ class OllamaProvider(Provider):
         model: str,
         host: str = "http://localhost:11434",
         temperature: float = 0.2,
-        timeout_seconds: int = 120,
+        timeout_seconds: int = 300,
     ):
         self.model = model
         self.host = host

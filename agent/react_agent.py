@@ -30,6 +30,7 @@ class AgentStep:
     tokens_in: int
     tokens_out: int
     latency_ms: float
+    raw_response: str = ""
 
 
 def _now() -> str:
@@ -93,18 +94,42 @@ def execute_tool(working_dir: Path, sandbox: Sandbox, tests_dir: Path, tool: str
 
 
 def _extract_fenced_content(remainder: str) -> str:
-    """Pull the raw text out of the first ```-fenced block in `remainder`,
-    dropping an optional language tag on the opening fence line."""
-    fence_start = remainder.find("```")
-    if fence_start == -1:
+    """Pull the real file content out of `remainder`, which may contain
+    more than one ```-fenced block. Some models wrap the JSON header
+    itself in its own fence despite being told not to, sometimes with a
+    stray caption line before the real content's fence — so the *first*
+    fence pair isn't reliably the right one. Instead, pair up every fence
+    found and take the longest resulting block: real file content is
+    reliably much longer than a stray fence-closer or a one-line caption."""
+    positions = []
+    idx = 0
+    while True:
+        idx = remainder.find("```", idx)
+        if idx == -1:
+            break
+        positions.append(idx)
+        idx += 3
+
+    if len(positions) < 2:
         raise ValueError("write_file response is missing its fenced content block")
-    after_open = remainder[fence_start + 3 :]
-    if "\n" in after_open:
-        after_open = after_open.split("\n", 1)[1]
-    fence_end = after_open.find("```")
-    if fence_end == -1:
-        raise ValueError("write_file response's fenced content block is not closed")
-    return after_open[:fence_end]
+
+    # An odd count means one fence has no partner within `remainder` —
+    # this happens when the model wraps the JSON header in its own fence
+    # (against instructions): that wrapper's *opening* fence appears
+    # before the header, outside `remainder` entirely, so only its
+    # *closing* fence shows up here, unmatched, first. Drop it before
+    # pairing, or every pair after it is misaligned by one.
+    if len(positions) % 2 == 1:
+        positions = positions[1:]
+
+    candidates = []
+    for start, end in zip(positions[0::2], positions[1::2]):
+        block = remainder[start + 3 : end]
+        if "\n" in block:
+            block = block.split("\n", 1)[1]  # drop an optional language tag
+        candidates.append(block)
+
+    return max(candidates, key=len)
 
 
 def parse_step(text: str) -> dict:
@@ -137,6 +162,13 @@ def run_agent(
     sandbox: Sandbox,
     max_iterations: int,
 ) -> AgentRunResult:
+    # On macOS, tempfile.mkdtemp() returns a path through a symlink (e.g. /var/...,
+    # which is really /private/var/...) — without this, _safe_path's own
+    # .resolve() call would follow that symlink while working_dir stayed
+    # unresolved, making every relative_to() check fail even for files
+    # genuinely inside the working directory.
+    working_dir = Path(working_dir).resolve()
+
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": f"Task:\n{task_description}"},
@@ -144,7 +176,17 @@ def run_agent(
     steps: list[AgentStep] = []
 
     for iteration in range(1, max_iterations + 1):
-        result = provider.complete(messages)
+        try:
+            result = provider.complete(messages)
+        except OSError as e:
+            # A slow generation exceeding the provider's timeout shouldn't 
+            # destroy every step already recorded — end the run here, with 
+            # whatever trace data exists so far, instead of letting the 
+            # exception propagate and losing it all.
+            summary = f"provider error: {e}"
+            steps.append(AgentStep(_now(), iteration, "provider_error", {}, summary, 0, 0, 0.0))
+            return AgentRunResult(finished=False, iterations=iteration, steps=steps, summary=summary)
+
         messages.append({"role": "assistant", "content": result.text})
 
         try:
@@ -153,7 +195,8 @@ def run_agent(
             observation = f"ERROR: {e}. Respond with exactly one JSON object as instructed."
             messages.append({"role": "user", "content": observation})
             steps.append(AgentStep(_now(), iteration, "parse_error", {}, observation,
-                                    result.tokens_in, result.tokens_out, result.latency_ms))
+                                    result.tokens_in, result.tokens_out, result.latency_ms,
+                                    raw_response=result.text))
             continue
 
         tool, args = step["tool"], step.get("args", {})
@@ -161,13 +204,15 @@ def run_agent(
         if tool == "finish":
             summary = args.get("summary", "")
             steps.append(AgentStep(_now(), iteration, "finish", args, summary,
-                                    result.tokens_in, result.tokens_out, result.latency_ms))
+                                    result.tokens_in, result.tokens_out, result.latency_ms,
+                                    raw_response=result.text))
             return AgentRunResult(finished=True, iterations=iteration, steps=steps, summary=summary)
 
         observation = execute_tool(working_dir, sandbox, tests_dir, tool, args)
         messages.append({"role": "user", "content": f"Observation:\n{observation}"})
         steps.append(AgentStep(_now(), iteration, tool, args, observation,
-                                result.tokens_in, result.tokens_out, result.latency_ms))
+                                result.tokens_in, result.tokens_out, result.latency_ms,
+                                raw_response=result.text))
 
     return AgentRunResult(finished=False, iterations=max_iterations, steps=steps,
                            summary="max iterations reached without calling finish")
