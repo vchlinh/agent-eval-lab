@@ -1,0 +1,63 @@
+id: task_008
+title: Deduplicate header formatting between render_note() and render_summary()
+category: refactor
+description: |
+  `formatting.py` has two functions, `render_note` and `render_summary`,
+  that each independently build a note's header the same way
+  (`f"# {note.title}"`), duplicated in both places.
+
+  Extract that shared logic into a single helper function
+  `_format_header(note)` and use it in both `render_note` and
+  `render_summary`, so the header-formatting logic exists in exactly one
+  place. `render_list` calls `render_note` and doesn't need to change.
+
+  Do not change the observable output of any of these functions — this is
+  a pure refactor, not a behavior change.
+
+budget:
+  max_iterations: 15
+  timeout_seconds: 30
+
+test_command: ["pytest", "-q"]
+
+qa:
+  starting_repo_fails: true
+  description_self_sufficient: true
+  reference_solution_passes: true
+  alternate_solution_passes: true
+  unrelated_behavior_intact: true
+  tests_not_guessable: true
+  tests_catch_incomplete_solution: true
+  runs_within_budget: true
+  notes: |
+    Refactor tasks need a structural check, not just a behavioral one —
+    the duplicated starting code already produces correct output, so
+    output-only tests would pass on the unrefactored starting repo and
+    violate "starting repo genuinely fails." tests/test_dedup_structural.py
+    monkeypatches `formatting._format_header` and asserts BOTH
+    render_note's and render_summary's output reflect the patch, which
+    only holds if both functions genuinely call one shared function.
+    tests/test_render_behavior_preserved.py separately locks down exact
+    output (golden strings) so a "refactor" that also changes behavior
+    is caught.
+
+    Verified 2026-08-27 through harness/sandbox.py
+    (scratchpad/verify_tasks_004_009.py):
+    - repo/formatting.py (duplicated inline header, no _format_header):
+      FAIL — caught by the structural test (hasattr check), even though
+      output alone would have passed.
+    - solution/formatting.py (_format_header extracted, used by both):
+      PASS.
+    - Alternate valid implementation (_format_header via string
+      concatenation instead of an f-string, otherwise equivalent): PASS —
+      the structural test only requires the shared function name and that
+      both callers use it, not a specific internal implementation.
+    - Plausible incomplete fix (extracted _format_header but only wired
+      it into render_note, left render_summary's own inline header
+      untouched — a partial refactor): FAIL — caught specifically by the
+      monkeypatch test, since patching _format_header only changes
+      render_note's output, not render_summary's.
+    - The explicit function name `_format_header` is stated directly in
+      the task description, so testing for it isn't "guessable hidden
+      information" — it's literally what was asked for, the same way
+      task_002's `low_stock` method name is both described and tested.

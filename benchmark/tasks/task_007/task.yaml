@@ -1,0 +1,65 @@
+id: task_007
+title: Write tests for the untested render_note()
+category: test_writing
+description: |
+  `formatting.py`'s `render_note(note)` function is correct and already
+  used elsewhere in the codebase, but it has no tests.
+
+  Create a new file named exactly `test_render_note.py` in the repository
+  root containing pytest tests for `render_note`. Import `Note` from
+  `notes` and `render_note` from `formatting`.
+
+  Your tests must cover at least:
+  - a note with no tags
+  - a note with one or more tags
+  - a note with an empty body
+
+  Write real assertions on the exact rendered output (not just "it
+  returns a string") — your tests need to be strong enough to catch a
+  broken implementation, not just confirm one runs without crashing.
+
+budget:
+  max_iterations: 15
+  timeout_seconds: 30
+
+test_command: ["pytest", "-q"]
+
+qa:
+  starting_repo_fails: true
+  description_self_sufficient: true
+  reference_solution_passes: true
+  alternate_solution_passes: true
+  unrelated_behavior_intact: true
+  tests_not_guessable: true
+  tests_catch_incomplete_solution: true
+  runs_within_budget: true
+  notes: |
+    This category grades differently from the others: the deliverable IS
+    test code, so hidden grading can't just run a fixed test file against
+    a fixed implementation. tests/test_agent_wrote_valid_tests.py instead:
+    (1) checks test_render_note.py was created, (2) runs it against the
+    real render_note (must pass), (3) swaps in 3 mutants of render_note
+    one at a time (drops tags, wrong tag separator, missing blank line
+    before body) and reruns the agent's test file against each (must
+    fail on every one, or the tests aren't actually testing behavior).
+    formatting.py is restored after each mutant.
+
+    Verified 2026-08-27 through harness/sandbox.py
+    (scratchpad/verify_tasks_004_009.py), using the actual grading
+    mechanism as the thing under test:
+    - "starting repo" = no agent test file created at all: FAIL (file
+      existence check).
+    - Weak test file (asserts only `isinstance(result, str)` and
+      non-empty): FAIL — passes against the real implementation but also
+      passes against all 3 mutants, so it's correctly rejected as
+      insufficient.
+    - Good test file (mirrors the reference: no-tags/with-tags/empty-body
+      cases with exact string assertions): PASS — passes against the real
+      implementation and fails against all 3 mutants.
+    - "reference solution" and "alternate solution" here are both the
+      good-test-file case exercised structurally the same way; there
+      isn't a separate reference/alternate *implementation* to fix since
+      render_note itself is never touched by this task.
+    - unrelated_behavior_intact: render_note/formatting.py/notes.py are
+      never modified by a correct solution to this task (only a new test
+      file is added), so nothing else is at risk of regressing.

@@ -1,0 +1,44 @@
+id: task_005
+title: Add most_recent() to NoteStore
+category: feature
+description: |
+  `notes.py` contains a `NoteStore` class that stores notes in the order
+  they're added (`add`, `get`, `delete`, `all`, `search`, `by_tag`,
+  `archive`, `active`). It's missing a `most_recent` method.
+
+  Add a method `most_recent(self, n)` that returns the `n` most recently
+  added notes, most recent first. If `n` is greater than the number of
+  stored notes, return all of them (still most-recent-first). If `n` is
+  0 or negative, return an empty list.
+
+budget:
+  max_iterations: 15
+  timeout_seconds: 30
+
+test_command: ["pytest", "-q"]
+
+qa:
+  starting_repo_fails: true
+  description_self_sufficient: true
+  reference_solution_passes: true
+  alternate_solution_passes: true
+  unrelated_behavior_intact: true
+  tests_not_guessable: true
+  tests_catch_incomplete_solution: true
+  runs_within_budget: true
+  notes: |
+    Verified 2026-08-27 by actually running each variant through
+    harness/sandbox.py (scratchpad/verify_tasks_004_009.py):
+    - repo/notes.py (method doesn't exist): FAIL (AttributeError).
+    - solution/notes.py (sorted(..., key=id, reverse=True)[:n], with an
+      n<=0 guard): PASS.
+    - Alternate valid implementation (list(values()).reverse() instead of
+      sorted() — relies on dict insertion order rather than the id field):
+      PASS — tests aren't overfit to the reference's specific approach.
+    - Plausible incomplete fix (correct n<=0 guard, but forgets
+      reverse=True and returns oldest-first): FAIL — caught by the
+      basic ordering test itself, a realistic "got the guard clause right,
+      got the actual sort direction wrong" mistake.
+    - Added a dedicated unrelated_methods_still_work test (add/get/by_tag/
+      search/archive/active) so an agent rewrite that collaterally breaks
+      a sibling method while adding most_recent() is caught.

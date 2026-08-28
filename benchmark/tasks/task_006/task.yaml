@@ -1,0 +1,49 @@
+id: task_006
+title: render_summary() mishandles the max_len boundary and non-positive max_len
+category: edge_case
+description: |
+  `formatting.py` contains `render_summary(note, max_len=50)`, which is
+  supposed to render a note as `"<header> - <body>"`, truncating the body
+  to `max_len` characters with a trailing "..." if it's longer than that.
+
+  It works for ordinary inputs but misbehaves at the boundaries. Fix it so
+  that:
+  - a body exactly `max_len` characters long is NOT truncated (currently
+    it is — off-by-one)
+  - a body one character longer than `max_len` IS truncated to `max_len`
+    characters plus "..."
+  - if `max_len` is 0 or negative, it raises
+    `ValueError("max_len must be positive")` (currently it silently does
+    the wrong thing instead of raising)
+
+budget:
+  max_iterations: 15
+  timeout_seconds: 30
+
+test_command: ["pytest", "-q"]
+
+qa:
+  starting_repo_fails: true
+  description_self_sufficient: true
+  reference_solution_passes: true
+  alternate_solution_passes: true
+  unrelated_behavior_intact: true
+  tests_not_guessable: true
+  tests_catch_incomplete_solution: true
+  runs_within_budget: true
+  notes: |
+    Verified 2026-08-27 by actually running each variant through
+    harness/sandbox.py (scratchpad/verify_tasks_004_009.py):
+    - repo/formatting.py (buggy: `len(text) < max_len` off-by-one, no
+      max_len<=0 guard): FAIL.
+    - solution/formatting.py: PASS.
+    - Alternate valid implementation (conditional expression instead of
+      if/else, otherwise equivalent): PASS.
+    - Plausible incomplete fix (fixes the boundary off-by-one correctly,
+      but forgets the max_len<=0 guard entirely — the realistic "fixed
+      the bug I could see in a demo, missed the one that needs an
+      explicit test to notice" mistake): FAIL, caught by the
+      max_len<=0/negative tests specifically.
+    - Added a dedicated unrelated_rendering_functions_still_work test
+      (render_note, render_list) so an agent rewrite that collaterally
+      breaks a sibling function while fixing render_summary is caught.

@@ -1,0 +1,53 @@
+id: task_004
+title: Fix case-sensitive search() in NoteStore
+category: bug_fix
+description: |
+  `notes.py` contains a `NoteStore` class with a `search(query)` method
+  that's supposed to return every note whose title or body contains
+  `query`, regardless of case (e.g. searching "milk" should match a note
+  whose body contains "Milk").
+
+  It currently does a case-sensitive substring match, so differently-cased
+  queries silently miss notes they should find.
+
+  Fix `search` so that:
+  - matching is case-insensitive against both the note's title and body
+  - a query matching only the title, only the body, or neither, behaves
+    correctly in each case
+  - an exact-case match still works (this isn't just "always match
+    everything")
+
+budget:
+  max_iterations: 15
+  timeout_seconds: 30
+
+test_command: ["pytest", "-q"]
+
+qa:
+  starting_repo_fails: true
+  description_self_sufficient: true
+  reference_solution_passes: true
+  alternate_solution_passes: true
+  unrelated_behavior_intact: true
+  tests_not_guessable: true
+  tests_catch_incomplete_solution: true
+  runs_within_budget: true
+  notes: |
+    Verified 2026-08-27 by actually running each variant through
+    harness/sandbox.py (scratchpad/verify_tasks_004_009.py), not just
+    reasoned about by hand:
+    - repo/notes.py (buggy case-sensitive search): FAIL.
+    - solution/notes.py (query.lower() against title.lower()/body.lower()):
+      PASS.
+    - Alternate valid implementation (casefold() + explicit loop instead
+      of a lower() + list comprehension): PASS — tests aren't overfit to
+      the reference's specific loop shape.
+    - Plausible incomplete fix (lowers the query and title, but forgets to
+      lower the body before comparing): FAIL — caught specifically by the
+      body-case-mismatch tests, the realistic "fixed the case I noticed,
+      missed the other" mistake.
+    - Added a dedicated unrelated_methods_still_work test: add/get/delete/
+      by_tag/most_recent all exercised, to catch an agent rewrite that
+      collaterally breaks a sibling method while touching search() — this
+      matters more now that notes.py is a shared multi-method file, not a
+      single-function file like task_001-003.

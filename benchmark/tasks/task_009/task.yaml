@@ -1,0 +1,51 @@
+id: task_009
+title: Add a priority field to notes
+category: api_change_docs
+description: |
+  `notes.py`'s `NoteStore.add(title, body, tags=None)` creates a new
+  `Note` but has no concept of priority.
+
+  Change `NoteStore.add` to accept a new keyword argument
+  `priority="normal"`. Valid values are `"low"`, `"normal"`, and
+  `"high"`; passing anything else must raise
+  `ValueError(f"invalid priority: {priority!r}")`. Store the value on the
+  created `Note` as `.priority`. Update `add`'s docstring to document the
+  new parameter.
+
+  Existing calls to `add(title, body)` or `add(title, body, tags)` without
+  a `priority` argument must keep working unchanged, defaulting to
+  `"normal"`.
+
+budget:
+  max_iterations: 15
+  timeout_seconds: 30
+
+test_command: ["pytest", "-q"]
+
+qa:
+  starting_repo_fails: true
+  description_self_sufficient: true
+  reference_solution_passes: true
+  alternate_solution_passes: true
+  unrelated_behavior_intact: true
+  tests_not_guessable: true
+  tests_catch_incomplete_solution: true
+  runs_within_budget: true
+  notes: |
+    Verified 2026-08-27 by actually running each variant through
+    harness/sandbox.py (scratchpad/verify_tasks_004_009.py):
+    - repo/notes.py (add() has no priority param at all): FAIL —
+      TypeError on any call passing priority, and n.priority doesn't
+      exist on notes created via the old signature either.
+    - solution/notes.py (priority param + tuple-membership validation):
+      PASS.
+    - Alternate valid implementation (if/elif/else chain instead of a
+      `not in VALID_PRIORITIES` tuple check, otherwise equivalent): PASS.
+    - Plausible incomplete fix (adds the priority param and stores it,
+      but forgets validation — accepts any string silently): FAIL,
+      caught specifically by the invalid-priority test; this is the
+      realistic "added the field, forgot the constraint the description
+      called out" mistake for an API-change task.
+    - Added a dedicated unrelated_methods_still_work test (by_tag/search/
+      archive/active/most_recent) so an agent rewrite that collaterally
+      breaks a sibling method while changing add()'s signature is caught.

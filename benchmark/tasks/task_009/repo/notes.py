@@ -1,0 +1,68 @@
+"""A tiny note-taking library: store notes, tag them, search and archive them."""
+
+
+class Note:
+    def __init__(self, id, title, body, tags=None):
+        self.id = id
+        self.title = title
+        self.body = body
+        self.tags = list(tags) if tags else []
+        self.archived = False
+
+    def __repr__(self):
+        return f"Note(id={self.id!r}, title={self.title!r})"
+
+
+class NoteStore:
+    """In-memory collection of Notes, keyed by an auto-incrementing id."""
+
+    def __init__(self):
+        self._notes = {}
+        self._next_id = 1
+
+    def add(self, title, body, tags=None):
+        """Create and store a new Note, returning it."""
+        note = Note(self._next_id, title, body, tags)
+        self._notes[note.id] = note
+        self._next_id += 1
+        return note
+
+    def get(self, note_id):
+        return self._notes.get(note_id)
+
+    def delete(self, note_id):
+        self._notes.pop(note_id, None)
+
+    def all(self):
+        return list(self._notes.values())
+
+    def search(self, query):
+        """Return notes whose title or body contains `query`, case-insensitively."""
+        q = query.lower()
+        return [
+            n for n in self._notes.values()
+            if q in n.title.lower() or q in n.body.lower()
+        ]
+
+    def by_tag(self, tag):
+        return [n for n in self._notes.values() if tag in n.tags]
+
+    def archive(self, note_id):
+        note = self._notes.get(note_id)
+        if note:
+            note.archived = True
+
+    def active(self):
+        return [n for n in self._notes.values() if not n.archived]
+
+    def most_recent(self, n):
+        """
+        Return the `n` most recently added notes, most recent first.
+
+        If `n` exceeds the number of stored notes, return all of them.
+        If `n` <= 0, return an empty list.
+        """
+        if n <= 0:
+            return []
+        ordered = sorted(self._notes.values(), key=lambda note: note.id, reverse=True)
+        return ordered[:n]
