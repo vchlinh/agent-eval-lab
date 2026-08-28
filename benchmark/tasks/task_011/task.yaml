@@ -1,0 +1,46 @@
+id: task_011
+title: Fix monthly_total() using exact date match instead of month prefix
+category: bug_fix
+description: |
+  `expenses.py`'s `ExpenseTracker.monthly_total(month)` is supposed to sum
+  the amounts of every expense whose `date` (a "YYYY-MM-DD" string) falls
+  in the given `month` (a "YYYY-MM" string, e.g. "2026-08" should match a
+  date of "2026-08-15"). Expenses with `date=None` should be excluded.
+
+  It currently compares `date` to `month` with exact equality, so it
+  never matches any real date (a full date like "2026-08-15" never
+  equals a month string like "2026-08") and always returns 0.
+
+  Fix it so that any expense whose date falls within the given month is
+  included in the sum.
+
+budget:
+  max_iterations: 15
+  timeout_seconds: 30
+
+test_command: ["pytest", "-q"]
+
+qa:
+  starting_repo_fails: true
+  description_self_sufficient: true
+  reference_solution_passes: true
+  alternate_solution_passes: true
+  unrelated_behavior_intact: true
+  tests_not_guessable: true
+  tests_catch_incomplete_solution: true
+  runs_within_budget: true
+  notes: |
+    Verified 2026-08-28 through harness/sandbox.py
+    (scratchpad/verify_tasks_010_020.py):
+    - repo/expenses.py (`e.date == month`): FAIL — always sums to 0 for
+      any real date.
+    - solution/expenses.py (`e.date.startswith(month)`, with a
+      `date is not None` guard): PASS.
+    - Alternate valid implementation (slices `e.date[:7] == month`
+      instead of startswith, otherwise equivalent): PASS.
+    - Plausible incomplete fix (uses startswith correctly, but forgets
+      the `date is not None` guard, so a `None` date raises AttributeError
+      instead of being excluded): FAIL — caught by a dedicated
+      none-date test.
+    - Added an unrelated_methods_still_work test to catch collateral
+      damage from an agent rewrite.

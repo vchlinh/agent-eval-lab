@@ -1,0 +1,45 @@
+id: task_013
+title: Add average_by_category() to ExpenseTracker
+category: feature
+description: |
+  `expenses.py` contains an `ExpenseTracker` class with `by_category` and
+  `total_by_category` methods, but no way to get the average expense
+  amount in a category.
+
+  Add a method `average_by_category(self, category)` that returns the
+  average `amount` of expenses in that category. If there are no
+  expenses in that category, return `0.0` (do not raise
+  `ZeroDivisionError`).
+
+budget:
+  max_iterations: 15
+  timeout_seconds: 30
+
+test_command: ["pytest", "-q"]
+
+qa:
+  starting_repo_fails: true
+  description_self_sufficient: true
+  reference_solution_passes: true
+  alternate_solution_passes: true
+  unrelated_behavior_intact: true
+  tests_not_guessable: true
+  tests_catch_incomplete_solution: true
+  runs_within_budget: true
+  notes: |
+    Verified 2026-08-28 through harness/sandbox.py
+    (scratchpad/verify_tasks_010_020.py):
+    - repo/expenses.py (method doesn't exist): FAIL (AttributeError).
+    - solution/expenses.py (`sum(...)/len(...)` with an empty-list guard
+      returning 0.0): PASS.
+    - Alternate valid implementation (accumulates sum and count in a
+      single loop instead of two passes via by_category() + sum()):
+      PASS.
+    - Plausible incomplete fix (correct division, but forgets the
+      empty-category guard, so an unused category raises
+      ZeroDivisionError instead of returning 0.0): FAIL — caught by a
+      dedicated empty-category test, the realistic "handles the normal
+      case, forgets the edge case explicitly called out in the
+      description" mistake.
+    - Added an unrelated_methods_still_work test to catch collateral
+      damage from an agent rewrite.

@@ -1,0 +1,61 @@
+id: task_010
+title: Fix largest() returning smallest expenses first
+category: bug_fix
+description: |
+  `expenses.py` contains an `ExpenseTracker` class with a `largest(n)`
+  method that's supposed to return the `n` largest expenses by amount,
+  descending (biggest first). Ties should be broken by insertion order
+  (the earlier expense first).
+
+  It currently sorts in the wrong direction, so it returns the `n`
+  *smallest* expenses instead.
+
+  Fix `largest` so that:
+  - the largest expense comes first, smallest of the returned set last
+  - ties (equal amounts) are broken by insertion order
+  - if `n` exceeds the number of stored expenses, all of them are
+    returned (still largest-first)
+  - if `n` <= 0, an empty list is returned
+
+budget:
+  max_iterations: 15
+  timeout_seconds: 30
+
+test_command: ["pytest", "-q"]
+
+qa:
+  starting_repo_fails: true
+  description_self_sufficient: true
+  reference_solution_passes: true
+  alternate_solution_passes: true
+  unrelated_behavior_intact: true
+  tests_not_guessable: true
+  tests_catch_incomplete_solution: true
+  runs_within_budget: true
+  notes: |
+    Verified 2026-08-28 through harness/sandbox.py
+    (scratchpad/verify_tasks_010_020.py):
+    - repo/expenses.py (sort key `(e.amount, e.id)`, ascending): FAIL.
+    - solution/expenses.py (`(-e.amount, e.id)`, descending with
+      insertion-order tiebreak): PASS.
+    - Alternate valid implementation (`sorted(..., reverse=True)` on
+      amount alone, no explicit id key): PASS.
+    - Plausible incomplete fix (correct descending sort, but forgets the
+      `n<=0` guard entirely): FAIL — caught by the negative-n test, once
+      that test used a 3-expense tracker rather than 1.
+    - First verification pass caught a real bug in this task's own test
+      design, not the code under test: the original "plausible wrong
+      fix" was "drops the explicit `.id` tiebreak" — but Python's
+      `sorted()` is stable, so on already-insertion-ordered input
+      (`self._expenses.values()`), dropping the explicit id key doesn't
+      change behavior at all; it's not actually wrong. It PASSED when it
+      should have FAILED, exposing the flaw. Separately, the original
+      negative-n test used a single-expense tracker, where `list[:-2]`
+      coincidentally returns `[]` regardless of whether the `n<=0` guard
+      exists — a genuinely missing guard would have passed that test
+      too. Replaced the wrong-fix scenario with the "missing n<=0 guard"
+      case and widened the negative-n test to 3 expenses so `[:-2]`
+      actually returns a non-empty (wrong) result when the guard is
+      missing. Re-verified: 43/43 checks pass.
+    - Added an unrelated_methods_still_work test (add/get/total/by_category)
+      to catch collateral damage from an agent rewrite.

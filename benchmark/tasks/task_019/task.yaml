@@ -1,0 +1,56 @@
+id: task_019
+title: Deduplicate budget-line formatting between format_single_category() and format_budget_report()
+category: refactor
+description: |
+  `budget.py` has two functions, `format_single_category` and
+  `format_budget_report`, that each independently build the same
+  "<category>: <spent> / <limit> (<status>)" line, with the same
+  `"OVER" if spent > limit else "ok"` status logic duplicated in both
+  places.
+
+  Extract that shared logic into a single helper function
+  `_format_line(category, spent, limit)` and use it in both
+  `format_single_category` and `format_budget_report`, so the line-
+  formatting logic exists in exactly one place. Do not change the
+  observable output of either function — this is a pure refactor, not a
+  behavior change.
+
+budget:
+  max_iterations: 15
+  timeout_seconds: 30
+
+test_command: ["pytest", "-q"]
+
+qa:
+  starting_repo_fails: true
+  description_self_sufficient: true
+  reference_solution_passes: true
+  alternate_solution_passes: true
+  unrelated_behavior_intact: true
+  tests_not_guessable: true
+  tests_catch_incomplete_solution: true
+  runs_within_budget: true
+  notes: |
+    Same structural-check pattern as task_008/task_018 — output-only
+    tests can't tell "refactored" from "duplicated but still correct."
+    tests/test_dedup_structural.py monkeypatches `budget._format_line`
+    and asserts BOTH format_single_category's and format_budget_report's
+    output reflect the patch.
+
+    Verified 2026-08-28 through harness/sandbox.py
+    (scratchpad/verify_tasks_010_020.py):
+    - repo/budget.py (duplicated inline status/line logic in both
+      functions, no _format_line): FAIL — caught by the structural test,
+      even though output alone was already correct.
+    - solution/budget.py (_format_line extracted, used by both): PASS.
+    - Alternate valid implementation (_format_line built with str.format
+      instead of an f-string, otherwise equivalent): PASS.
+    - Plausible incomplete fix (extracted _format_line but only wired it
+      into format_budget_report, left format_single_category's own
+      inline formatting untouched — a partial refactor): FAIL — caught
+      specifically by the monkeypatch test, since patching _format_line
+      only changes format_budget_report's output, not
+      format_single_category's.
+    - The explicit function name `_format_line` is stated directly in
+      the task description, so testing for it isn't "guessable hidden
+      information" — the same reasoning as task_008's `_format_header`.

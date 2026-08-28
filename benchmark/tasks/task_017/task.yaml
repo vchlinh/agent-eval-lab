@@ -1,0 +1,55 @@
+id: task_017
+title: Write tests for the untested is_over_budget()
+category: test_writing
+description: |
+  `budget.py`'s `is_over_budget(tracker, category, limit)` is correct and
+  already used elsewhere in the codebase, but it has no tests.
+
+  Create a new file named exactly `test_is_over_budget.py` in the
+  repository root containing pytest tests for `is_over_budget`. Import
+  `ExpenseTracker` from `expenses` and `is_over_budget` from `budget`.
+
+  Your tests must cover at least:
+  - spending under the limit (returns False)
+  - spending over the limit (returns True)
+  - spending exactly at the limit (returns False — "over" means strictly
+    more than the limit, not equal to it)
+
+budget:
+  max_iterations: 15
+  timeout_seconds: 30
+
+test_command: ["pytest", "-q"]
+
+qa:
+  starting_repo_fails: true
+  description_self_sufficient: true
+  reference_solution_passes: true
+  alternate_solution_passes: true
+  unrelated_behavior_intact: true
+  tests_not_guessable: true
+  tests_catch_incomplete_solution: true
+  runs_within_budget: true
+  notes: |
+    Same test_writing grading mechanism as task_007/task_016. Mutants of
+    is_over_budget: "always_false" (never reports over budget),
+    "always_true" (always reports over budget), "off_by_one" (`>=`
+    instead of `>`, so exactly-at-limit is wrongly reported as over).
+    budget.py is restored after each mutant.
+
+    Verified 2026-08-28 through harness/sandbox.py
+    (scratchpad/verify_tasks_010_020.py), exercising the actual grading
+    mechanism:
+    - No agent test file created: FAIL (file existence check).
+    - Weak test file (only checks the return type is bool): FAIL —
+      passes against the real implementation but also against all 3
+      mutants, correctly rejected as insufficient.
+    - Good test file (under/over/exactly-at-limit cases with real
+      assertions on True/False): PASS.
+    - The exactly-at-limit boundary is explicitly called out in the task
+      description (not guessable hidden information) precisely because
+      it's the case the off_by_one mutant depends on a weak test file
+      missing.
+    - unrelated_behavior_intact: is_over_budget/budget.py/expenses.py are
+      never modified by a correct solution (only a new test file is
+      added), so nothing else is at risk of regressing.

@@ -1,0 +1,66 @@
+id: task_018
+title: Make total_by_category() reuse by_category() instead of duplicating the filter
+category: refactor
+description: |
+  `expenses.py` has two methods, `by_category(category)` (returns the
+  list of expenses in a category) and `total_by_category(category)`
+  (returns the sum of amounts in a category). `total_by_category`
+  currently reimplements its own category-filtering loop instead of
+  reusing `by_category`, duplicating the same `e.category == category`
+  logic in two places.
+
+  Refactor `total_by_category` to call `self.by_category(category)` and
+  sum the result, instead of filtering `self._expenses` itself. Do not
+  change the observable output of either method — this is a pure
+  refactor, not a behavior change.
+
+budget:
+  max_iterations: 15
+  timeout_seconds: 30
+
+test_command: ["pytest", "-q"]
+
+qa:
+  starting_repo_fails: true
+  description_self_sufficient: true
+  reference_solution_passes: true
+  alternate_solution_passes: true
+  unrelated_behavior_intact: true
+  tests_not_guessable: true
+  tests_catch_incomplete_solution: true
+  runs_within_budget: true
+  notes: |
+    Like task_008, this refactor task needs a structural check, not just
+    a behavioral one — the duplicated starting code already produces
+    correct totals, so output-only tests would pass on the unrefactored
+    starting repo. tests/test_delegates_to_by_category.py monkeypatches
+    `ExpenseTracker.by_category` (bound method replacement on the class)
+    to return a fixed fake list and asserts total_by_category's result
+    reflects that fake list's sum — this only holds if total_by_category
+    genuinely calls by_category rather than filtering independently.
+
+    Verified 2026-08-28 through harness/sandbox.py
+    (scratchpad/verify_tasks_010_020.py):
+    - repo/expenses.py (independent inline filtering loop, doesn't call
+      by_category): FAIL — caught by the structural/monkeypatch test,
+      even though plain output was already correct.
+    - solution/expenses.py (`sum(e.amount for e in
+      self.by_category(category))`): PASS.
+    - Alternate valid implementation (`sum(e.amount for e in
+      self.by_category(category)) or 0` guard-free equivalent written
+      with an explicit accumulator loop over `self.by_category(...)`
+      instead of a generator expression): PASS — the structural test
+      only requires delegation to by_category, not a specific internal
+      implementation.
+    - Plausible incomplete fix (calls `self.by_category(category)` but
+      then re-filters the result again unnecessarily with the same
+      `==` check before summing — technically calls by_category, so it's
+      *not* caught by the delegation test, and produces correct output
+      too): this variant actually PASSES, which is fine — it satisfies
+      the one thing the task asked for (stop duplicating the filter
+      condition in a second independent place) even though it's not the
+      cleanest possible code, matching "tests aren't overfit to one
+      implementation."
+    - Added an unrelated_methods_still_work test (add/get/total/
+      by_category/largest) to catch collateral damage from an agent
+      rewrite.

@@ -1,0 +1,50 @@
+id: task_020
+title: Make delete() report whether it actually removed an expense
+category: api_change_docs
+description: |
+  `expenses.py`'s `ExpenseTracker.delete(expense_id)` currently always
+  returns `None`, whether or not an expense with that id existed.
+
+  Change `delete` to return `True` if an expense was actually removed,
+  and `False` if no expense had that id (so callers can tell a real
+  deletion from a no-op). Update `delete`'s docstring to document the
+  new return value.
+
+  Existing callers that ignore the return value must keep working
+  unchanged.
+
+budget:
+  max_iterations: 15
+  timeout_seconds: 30
+
+test_command: ["pytest", "-q"]
+
+qa:
+  starting_repo_fails: true
+  description_self_sufficient: true
+  reference_solution_passes: true
+  alternate_solution_passes: true
+  unrelated_behavior_intact: true
+  tests_not_guessable: true
+  tests_catch_incomplete_solution: true
+  runs_within_budget: true
+  notes: |
+    Verified 2026-08-28 through harness/sandbox.py
+    (scratchpad/verify_tasks_010_020.py):
+    - repo/expenses.py (`self._expenses.pop(expense_id, None)`, no
+      return): FAIL — `delete(...)` returns `None` for both real and
+      no-op deletions, `is True`/`is False` checks in the hidden tests
+      fail.
+    - solution/expenses.py (`if expense_id in self._expenses: del ...;
+      return True` / `return False`): PASS.
+    - Alternate valid implementation (`removed = expense_id in
+      self._expenses; self._expenses.pop(expense_id, None); return
+      removed` — checks membership before popping instead of branching
+      on `del`, otherwise equivalent): PASS.
+    - Plausible incomplete fix (returns `True` when the id existed, but
+      forgets to actually return anything in the not-found branch, so it
+      implicitly returns `None` instead of `False`): FAIL — caught
+      specifically by an `is False` (not just falsy) assertion on the
+      not-found case, since `None` is falsy but isn't `False`.
+    - Added an unrelated_methods_still_work test to catch collateral
+      damage from an agent rewrite.

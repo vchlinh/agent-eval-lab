@@ -1,0 +1,47 @@
+id: task_015
+title: add() mishandles negative amounts and the zero-amount boundary
+category: edge_case
+description: |
+  `expenses.py`'s `ExpenseTracker.add(amount, category, description="",
+  date=None)` currently accepts any `amount`, including negative numbers,
+  and stores it without complaint.
+
+  Fix `add` so that:
+  - a negative `amount` raises `ValueError("amount must be non-negative")`
+  - an `amount` of exactly `0` is valid and must NOT raise (a $0 expense
+    is a legitimate record, e.g. a fully-comped item) — this is the
+    boundary case a naive fix could easily get wrong
+  - a positive `amount` continues to work exactly as before
+
+budget:
+  max_iterations: 15
+  timeout_seconds: 30
+
+test_command: ["pytest", "-q"]
+
+qa:
+  starting_repo_fails: true
+  description_self_sufficient: true
+  reference_solution_passes: true
+  alternate_solution_passes: true
+  unrelated_behavior_intact: true
+  tests_not_guessable: true
+  tests_catch_incomplete_solution: true
+  runs_within_budget: true
+  notes: |
+    Verified 2026-08-28 through harness/sandbox.py
+    (scratchpad/verify_tasks_010_020.py):
+    - repo/expenses.py (no validation at all): FAIL — a negative amount
+      is silently accepted.
+    - solution/expenses.py (`if amount < 0: raise ValueError(...)`):
+      PASS.
+    - Alternate valid implementation (`if amount >= 0: <proceed> else:
+      raise`, i.e. inverted control flow reaching the same outcome):
+      PASS.
+    - Plausible incomplete fix (guards with `if amount <= 0: raise`,
+      the natural but wrong boundary — rejecting the legitimate $0 case
+      along with real negatives): FAIL — caught by a dedicated
+      zero-amount test, exactly the boundary mistake the task
+      description calls out.
+    - Added an unrelated_methods_still_work test to catch collateral
+      damage from an agent rewrite.

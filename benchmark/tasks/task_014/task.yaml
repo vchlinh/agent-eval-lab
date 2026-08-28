@@ -1,0 +1,52 @@
+id: task_014
+title: Add categories_over_budget() to budget.py
+category: feature
+description: |
+  `budget.py` has `remaining(tracker, category, limit)` and
+  `is_over_budget(tracker, category, limit)`, which both work on one
+  category at a time, but there's no way to check several categories at
+  once.
+
+  Add a function `categories_over_budget(tracker, limits)`, where
+  `limits` is a dict mapping category name to its spending limit. Return
+  a sorted (alphabetical) list of the category names whose spending
+  currently exceeds their limit. A category exactly at its limit is not
+  "over."
+
+budget:
+  max_iterations: 15
+  timeout_seconds: 30
+
+test_command: ["pytest", "-q"]
+
+qa:
+  starting_repo_fails: true
+  description_self_sufficient: true
+  reference_solution_passes: true
+  alternate_solution_passes: true
+  unrelated_behavior_intact: true
+  tests_not_guessable: true
+  tests_catch_incomplete_solution: true
+  runs_within_budget: true
+  notes: |
+    Verified 2026-08-28 through harness/sandbox.py
+    (scratchpad/verify_tasks_010_020.py):
+    - repo/budget.py (function doesn't exist): FAIL (NameError/AttributeError).
+    - solution/budget.py (generator + `sorted()`, reusing
+      `tracker.total_by_category`): PASS.
+    - Alternate valid implementation (builds an unsorted list in a plain
+      for-loop, then calls `.sort()` at the end instead of `sorted()`):
+      PASS.
+    - Plausible incomplete fix (correct over-budget check, but returns
+      results in `limits`' dict iteration order instead of sorting
+      alphabetically): FAIL — caught by a dedicated test using a dict
+      whose insertion order doesn't match alphabetical order.
+    - First verification pass caught a real bug in this task's own test,
+      not the code under test: `test_returns_only_over_budget_categories`
+      asserted `["fun", "food"]` as the expected alphabetical order, but
+      "food" < "fun" alphabetically (comparing the second character, "o"
+      < "u") — the reference solution and a valid alternate both failed
+      against the test's own wrong expected value. Fixed the assertion
+      to `["food", "fun"]`. Re-verified: 43/43 checks pass.
+    - Added an unrelated_functions_still_work test (remaining,
+      is_over_budget) to catch collateral damage from an agent rewrite.

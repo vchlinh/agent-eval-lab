@@ -1,0 +1,43 @@
+id: task_012
+title: Fix total() summing expense ids instead of amounts
+category: bug_fix
+description: |
+  `expenses.py`'s `ExpenseTracker.total()` is supposed to return the sum
+  of every stored expense's `amount`.
+
+  It currently sums the internal dictionary's *keys* (the expense ids)
+  instead of the expenses' amounts, so it returns a number related to how
+  many expenses exist and their ids, not how much was actually spent.
+
+  Fix `total()` to sum the `amount` field of every stored expense.
+
+budget:
+  max_iterations: 15
+  timeout_seconds: 30
+
+test_command: ["pytest", "-q"]
+
+qa:
+  starting_repo_fails: true
+  description_self_sufficient: true
+  reference_solution_passes: true
+  alternate_solution_passes: true
+  unrelated_behavior_intact: true
+  tests_not_guessable: true
+  tests_catch_incomplete_solution: true
+  runs_within_budget: true
+  notes: |
+    Verified 2026-08-28 through harness/sandbox.py
+    (scratchpad/verify_tasks_010_020.py):
+    - repo/expenses.py (`sum(self._expenses.keys())`): FAIL — e.g. two
+      expenses of very different amounts but ids 1, 2 both return 3
+      regardless of actual amounts.
+    - solution/expenses.py (`sum(e.amount for e in ...values())`): PASS.
+    - Alternate valid implementation (explicit accumulator loop instead
+      of a generator expression): PASS.
+    - Plausible incomplete fix (sums `e.id + e.amount` per expense —
+      a "looks like it touches amount now" mistake that's still wrong):
+      FAIL — caught because it doesn't match plain amount sums once ids
+      are nonzero.
+    - Added an unrelated_methods_still_work test to catch collateral
+      damage from an agent rewrite.

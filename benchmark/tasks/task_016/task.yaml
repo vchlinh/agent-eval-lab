@@ -1,0 +1,59 @@
+id: task_016
+title: Write tests for the untested by_category()
+category: test_writing
+description: |
+  `expenses.py`'s `ExpenseTracker.by_category(category)` is correct and
+  already used elsewhere in the codebase, but it has no tests.
+
+  Create a new file named exactly `test_by_category.py` in the repository
+  root containing pytest tests for `by_category`. Import `ExpenseTracker`
+  from `expenses`.
+
+  Your tests must cover at least:
+  - a tracker with expenses in multiple categories, where `by_category`
+    returns only the matching ones
+  - a category with no matching expenses (returns an empty list)
+  - an empty tracker
+
+  Write real assertions on the actual returned expenses (not just "it
+  returns a list") — your tests need to be strong enough to catch a
+  broken implementation, not just confirm one runs without crashing.
+
+budget:
+  max_iterations: 15
+  timeout_seconds: 30
+
+test_command: ["pytest", "-q"]
+
+qa:
+  starting_repo_fails: true
+  description_self_sufficient: true
+  reference_solution_passes: true
+  alternate_solution_passes: true
+  unrelated_behavior_intact: true
+  tests_not_guessable: true
+  tests_catch_incomplete_solution: true
+  runs_within_budget: true
+  notes: |
+    Same test_writing grading mechanism as task_007: hidden grading
+    (1) checks test_by_category.py was created, (2) runs it against the
+    real by_category (must pass), (3) swaps in 3 mutants one at a time
+    and reruns the agent's test file against each (must fail on every
+    one): "matches_all" (ignores category filter entirely, returns
+    everything), "wrong_field" (filters on description instead of
+    category), "empty_always" (always returns []). expenses.py is
+    restored after each mutant.
+
+    Verified 2026-08-28 through harness/sandbox.py
+    (scratchpad/verify_tasks_010_020.py), exercising the actual grading
+    mechanism:
+    - No agent test file created: FAIL (file existence check).
+    - Weak test file (asserts only `isinstance(result, list)`): FAIL —
+      passes against the real implementation but also passes against all
+      3 mutants, correctly rejected as insufficient.
+    - Good test file (mirrors the reference: multi-category, no-match,
+      empty-tracker cases with real assertions on the returned
+      expenses): PASS.
+    - unrelated_behavior_intact: by_category/expenses.py/budget.py are
+      never modified by a correct solution (only a new test file is
+      added), so nothing else is at risk of regressing.
