@@ -106,42 +106,70 @@ def main() -> None:
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--temperature", type=float, default=DEFAULT_TEMPERATURE)
     parser.add_argument("--trials", type=int, default=1)
+    parser.add_argument(
+        "--resume",
+        help="path to an existing run_<timestamp>_<model> dir to continue -- "
+        "skips any (task_id, trial) pair already present in its results.json "
+        "and appends the rest. Model/temperature/trials/task_ids are read "
+        "from that run's own config.json, not from the other CLI flags, so "
+        "a resumed run can't silently drift from what it started with.",
+    )
     args = parser.parse_args()
 
-    tasks = [load_task(TASKS_ROOT / args.task)] if args.task else load_tasks(TASKS_ROOT)
-    if not tasks:
-        raise SystemExit("no QA'd tasks found to run")
+    if args.resume:
+        run_dir = Path(args.resume)
+        config = json.loads((run_dir / "config.json").read_text())
+        model, temperature, trial_count = config["model"], config["temperature"], config["trial_count"]
+        tasks = [load_task(TASKS_ROOT / tid) for tid in config["task_ids"]]
+        results_path = run_dir / "results.json"
+        results = json.loads(results_path.read_text()) if results_path.is_file() else []
+        done = {(r["task_id"], r["trial"]) for r in results}
+        print(f"[runner] resuming {run_dir} -- {len(done)} trial(s) already recorded", flush=True)
+    else:
+        tasks = [load_task(TASKS_ROOT / args.task)] if args.task else load_tasks(TASKS_ROOT)
+        if not tasks:
+            raise SystemExit("no QA'd tasks found to run")
+        model, temperature, trial_count = args.model, args.temperature, args.trials
 
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    model_tag = args.model.replace(":", "-").replace("/", "-")
-    run_dir = RESULTS_ROOT / f"run_{timestamp}_{model_tag}"
-    run_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        model_tag = model.replace(":", "-").replace("/", "-")
+        run_dir = RESULTS_ROOT / f"run_{timestamp}_{model_tag}"
+        run_dir.mkdir(parents=True, exist_ok=True)
 
-    git_commit, git_dirty = _git_commit()
-    config = {
-        "model": args.model,
-        "temperature": args.temperature,
-        "prompt_version": PROMPT_VERSION,
-        "git_commit": git_commit,
-        "git_dirty": git_dirty,
-        "timestamp": timestamp,
-        "trial_count": args.trials,
-        "task_ids": [t.id for t in tasks],
-    }
-    (run_dir / "config.json").write_text(json.dumps(config, indent=2))
+        git_commit, git_dirty = _git_commit()
+        config = {
+            "model": model,
+            "temperature": temperature,
+            "prompt_version": PROMPT_VERSION,
+            "git_commit": git_commit,
+            "git_dirty": git_dirty,
+            "timestamp": timestamp,
+            "trial_count": trial_count,
+            "task_ids": [t.id for t in tasks],
+        }
+        (run_dir / "config.json").write_text(json.dumps(config, indent=2))
+        results_path = run_dir / "results.json"
+        results = []
+        done = set()
 
-    results = []
     for task in tasks:
-        for trial in range(1, args.trials + 1):
-            print(f"[runner] {task.id} trial {trial}/{args.trials} ...", flush=True)
-            result = run_one_trial(task, trial, args.model, args.temperature, run_dir)
+        for trial in range(1, trial_count + 1):
+            if (task.id, trial) in done:
+                continue
+            print(f"[runner] {task.id} trial {trial}/{trial_count} ...", flush=True)
+            result = run_one_trial(task, trial, model, temperature, run_dir)
             status = "PASS" if result["passed"] else "FAIL"
             print(f"[runner]   -> {status} ({result['iterations']} iterations, "
                   f"{result['tool_calls']} tool calls, {result['wall_clock_seconds']:.1f}s)")
             results.append(result)
+            # Rewritten after every trial, not just at the end -- a run that
+            # covers many tasks x trials can take hours, and a partial
+            # results.json is far more useful than none if the process gets
+            # interrupted partway through (the trace files already save
+            # incrementally; this closes the gap for the aggregate table).
+            results_path.write_text(json.dumps(results, indent=2))
 
-    (run_dir / "results.json").write_text(json.dumps(results, indent=2))
-    print(f"\n[runner] wrote {run_dir}/config.json and {run_dir}/results.json")
+    print(f"\n[runner] wrote {run_dir}/config.json and {results_path}")
 
 
 if __name__ == "__main__":
