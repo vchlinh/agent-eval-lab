@@ -13,6 +13,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+from agent.context import build_initial_message
 from agent.providers import Provider
 from harness.sandbox import Sandbox
 
@@ -161,6 +162,7 @@ def run_agent(
     provider: Provider,
     sandbox: Sandbox,
     max_iterations: int,
+    context_mode: str = "A",
 ) -> AgentRunResult:
     # On macOS, tempfile.mkdtemp() returns a path through a symlink (e.g. /var/...,
     # which is really /private/var/...) — without this, _safe_path's own
@@ -171,7 +173,7 @@ def run_agent(
 
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": f"Task:\n{task_description}"},
+        {"role": "user", "content": build_initial_message(task_description, working_dir, context_mode)},
     ]
     steps: list[AgentStep] = []
 

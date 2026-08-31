@@ -22,6 +22,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+from agent.context import CONTEXT_MODES
 from agent.providers import OllamaProvider
 from agent.react_agent import PROMPT_VERSION, run_agent
 from benchmark.schema import Task, load_task, load_tasks
@@ -52,7 +53,9 @@ def _git_commit() -> tuple[str, bool]:
         return "unknown", False
 
 
-def run_one_trial(task: Task, trial: int, model: str, temperature: float, run_dir: Path) -> dict:
+def run_one_trial(
+    task: Task, trial: int, model: str, temperature: float, context_mode: str, run_dir: Path
+) -> dict:
     working_dir = Path(tempfile.mkdtemp(prefix=f"{task.id}_trial{trial}_"))
     try:
         shutil.copytree(task.repo_dir, working_dir, dirs_exist_ok=True)
@@ -67,6 +70,7 @@ def run_one_trial(task: Task, trial: int, model: str, temperature: float, run_di
             provider=provider,
             sandbox=sandbox,
             max_iterations=task.budget.max_iterations,
+            context_mode=context_mode,
         )
         wall_clock_seconds = time.monotonic() - start
 
@@ -107,6 +111,13 @@ def main() -> None:
     parser.add_argument("--temperature", type=float, default=DEFAULT_TEMPERATURE)
     parser.add_argument("--trials", type=int, default=1)
     parser.add_argument(
+        "--context",
+        choices=CONTEXT_MODES,
+        default="A",
+        help="context strategy: A = task description only (default), "
+        "B = task description + repo tree + full file contents",
+    )
+    parser.add_argument(
         "--resume",
         help="path to an existing run_<timestamp>_<model> dir to continue -- "
         "skips any (task_id, trial) pair already present in its results.json "
@@ -120,6 +131,9 @@ def main() -> None:
         run_dir = Path(args.resume)
         config = json.loads((run_dir / "config.json").read_text())
         model, temperature, trial_count = config["model"], config["temperature"], config["trial_count"]
+        # older runs predate the context A/B experiment -- default to "A" so
+        # they still resume as the mode they actually ran under.
+        context_mode = config.get("context_mode", "A")
         tasks = [load_task(TASKS_ROOT / tid) for tid in config["task_ids"]]
         results_path = run_dir / "results.json"
         results = json.loads(results_path.read_text()) if results_path.is_file() else []
@@ -129,11 +143,13 @@ def main() -> None:
         tasks = [load_task(TASKS_ROOT / args.task)] if args.task else load_tasks(TASKS_ROOT)
         if not tasks:
             raise SystemExit("no QA'd tasks found to run")
-        model, temperature, trial_count = args.model, args.temperature, args.trials
+        model, temperature, trial_count, context_mode = (
+            args.model, args.temperature, args.trials, args.context,
+        )
 
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         model_tag = model.replace(":", "-").replace("/", "-")
-        run_dir = RESULTS_ROOT / f"run_{timestamp}_{model_tag}"
+        run_dir = RESULTS_ROOT / f"run_{timestamp}_{model_tag}_context{context_mode}"
         run_dir.mkdir(parents=True, exist_ok=True)
 
         git_commit, git_dirty = _git_commit()
@@ -141,6 +157,7 @@ def main() -> None:
             "model": model,
             "temperature": temperature,
             "prompt_version": PROMPT_VERSION,
+            "context_mode": context_mode,
             "git_commit": git_commit,
             "git_dirty": git_dirty,
             "timestamp": timestamp,
@@ -157,7 +174,7 @@ def main() -> None:
             if (task.id, trial) in done:
                 continue
             print(f"[runner] {task.id} trial {trial}/{trial_count} ...", flush=True)
-            result = run_one_trial(task, trial, model, temperature, run_dir)
+            result = run_one_trial(task, trial, model, temperature, context_mode, run_dir)
             status = "PASS" if result["passed"] else "FAIL"
             print(f"[runner]   -> {status} ({result['iterations']} iterations, "
                   f"{result['tool_calls']} tool calls, {result['wall_clock_seconds']:.1f}s)")
